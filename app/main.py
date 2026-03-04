@@ -74,7 +74,7 @@ def process_alerts(alerts: List[Dict[str, Any]], database_url: str) -> List[Dict
                 database_url=database_url,
                 alert_id=alert["id"],
                 plot_id=plot_id,
-                alert_date=alert["date"],
+                alert_date=datetime.fromisoformat(alert["date"].replace("Z", "+00:00")),
                 notif_type_id=alert.get("notifTypeId"),
             )
     return messages_to_send
@@ -98,6 +98,8 @@ def main() -> None:
         initialize_database(database_url)
 
         last_date = get_latest_processed_date(database_url)
+        if last_date is not None:
+            last_date = last_date.isoformat()
 
         all_alerts = []
         skip = 0
@@ -133,7 +135,7 @@ def main() -> None:
                     database_url=database_url,
                     alert_id=alert["id"],
                     plot_id=alert.get("plotId"),
-                    alert_date=alert["date"],
+                    alert_date=datetime.fromisoformat(alert["date"].replace("Z", "+00:00")),
                     notif_type_id=alert.get("notifTypeId"),
                 )
 
