@@ -6,15 +6,15 @@ import logging
 from typing import Any, Dict, List
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
-from app.database import is_database_empty
+from app.database import is_first_deployment, mark_first_deployment_done
 from app.database import get_latest_processed_date
 from app.notification_service import send_notification
 from app.database import delete_old_processed_alerts
+from app.config import get_farm_user_id
 
 from app.config import (
     load_environment,
     get_fyllo_base_url,
-    get_fyllo_token,
     get_database_url,
 )
 from app.database import (
@@ -22,14 +22,14 @@ from app.database import (
     is_alert_processed,
     mark_alert_processed,
 )
-from app.fyllo_client import fetch_recent_alerts
+from app.fyllo_client import FylloClient
 from app.alert_processor import is_alert_valid, simplify_alert_text
 
 
-"""logging.basicConfig(
+logging.basicConfig(
    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-)"""
+)
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -88,12 +88,14 @@ def main() -> None:
         base_url = get_fyllo_base_url()
         if not base_url:
             raise ValueError("FYLLO_BASE_URL is not set")
-        token = get_fyllo_token()
-        if not token:
-            raise ValueError("FYLLO_TOKEN is not set")
+        client = FylloClient(base_url)
+        
         database_url = get_database_url()
         if not database_url:
             raise ValueError("DATABASE_URL is not set")
+        farm_user_id = get_farm_user_id()
+        if not farm_user_id:
+            raise ValueError("FARM_USER_ID is not set")
 
         initialize_database(database_url)
 
@@ -103,17 +105,14 @@ def main() -> None:
 
         all_alerts = []
         skip = 0
-        batch_size = 200  # increase from 100
+        batch_size = 200
 
         while True:
-            alerts_batch = fetch_recent_alerts(
-                base_url,
-                token,
+            alerts_batch = client.fetch_recent_alerts(
                 since=last_date,
                 limit=batch_size,
                 skip=skip,
             )
-
             if not alerts_batch:
                 break
             
@@ -127,9 +126,8 @@ def main() -> None:
         alerts = all_alerts
 
         # If DB is empty → first deployment
-        if is_database_empty(database_url):
+        if is_first_deployment(database_url):
             print("First deployment detected. Marking existing alerts as processed without sending.")
-
             for alert in alerts:
                 mark_alert_processed(
                     database_url=database_url,
@@ -138,7 +136,7 @@ def main() -> None:
                     alert_date=datetime.fromisoformat(alert["date"].replace("Z", "+00:00")),
                     notif_type_id=alert.get("notifTypeId"),
                 )
-
+            mark_first_deployment_done(database_url)
             return
     
         messages = process_alerts(alerts, database_url)

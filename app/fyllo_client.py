@@ -1,54 +1,110 @@
-"""
-Client for fetching alerts from Fyllo.
-"""
-
-import logging
 import requests
+import logging
 from typing import Any, Dict, List
-from app.config import get_farm_user_id
+from app.config import get_farm_user_id, get_fyllo_password
 import json
+import os
+
+TOKEN_FILE = "fyllo_token.txt"
+
+class FylloClient:
+
+    def __init__(self, base_url: str):
+        self.base_url = base_url
+        self.token: str | None = None
+
+        if os.path.exists(TOKEN_FILE):
+            with open(TOKEN_FILE, "r") as f:
+                self.token = f.read().strip()
+
+    def login(self) -> None:
+
+        logging.info("Logging in to Fyllo API")
+
+        url = f"{self.base_url}/farm-users/login"
+
+        payload = {
+            "farmUserId": get_farm_user_id(),
+            "otp": get_fyllo_password()
+        }
+
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+
+        self.token = data["access_token"]
+
+        with open(TOKEN_FILE, "w") as f:
+            f.write(self.token)
+
+        logging.info("Fyllo login successful and token saved")
 
 
-def fetch_recent_alerts(
-    base_url: str,
-    token: str,
-    since: str | None = None,
-    limit: int = 100,
-    skip: int = 0,
-) -> List[Dict[str, Any]]:
-    """
-    Fetch recent alerts from Fyllo.
-    """
-    url = f"{base_url}/app-notifs"
+    def _get_headers(self) -> Dict[str, str]:
+        if not self.token:
+            self.login()
 
-    farm_user_id = get_farm_user_id()
+        return {"Authorization": f"Bearer {self.token}"}
 
-    where_clause = {"farmUserId": farm_user_id}
+    def fetch_recent_alerts(
+        self,
+        since: str | None = None,
+        limit: int = 200,
+        skip: int = 0
+    ) -> List[Dict[str, Any]]:
 
-    if since:
-        where_clause["date"] = {"gte": since}
+        url = f"{self.base_url}/app-notifs"
 
-    filter_query = {
-        "where": where_clause,
-        "order": ["date ASC"],
-        "limit": limit,
-        "skip": skip,
-    }
+        where_clause = {
+            "farmUserId": get_farm_user_id()
+        }
 
-    headers = {"Authorization": f"Bearer {token}"}
+        if since:
+            where_clause["date"] = {"gte": since}
 
-    for attempt in range(3):
-        try:
-            response = requests.get(
-                url,
-                headers=headers,
-                params={"filter": json.dumps(filter_query)},
-                timeout=10,
-            )
-            response.raise_for_status()
-            return response.json()
+        filter_query = {
+            "where": where_clause,
+            "order": ["date ASC"],
+            "limit": limit,
+            "skip": skip,
+        }
 
-        except requests.RequestException as exc:
-            if attempt == 2:
-                logging.error("Failed after retries: %s", exc)
-                return []
+        for attempt in range(3):
+            try:
+
+                response = requests.get(
+                    url,
+                    headers=self._get_headers(),
+                    params={"filter": json.dumps(filter_query)},
+                    timeout=10,
+                )
+
+                if response.status_code == 401:
+                    logging.info("Token expired. Re-authenticating.")
+                    self.login()
+
+                    response = requests.get(
+                        url,
+                        headers=self._get_headers(),
+                        params={"filter": json.dumps(filter_query)},
+                        timeout=10,
+                    )
+
+                response.raise_for_status()
+
+                return response.json()
+
+            except requests.RequestException as exc:
+
+                logging.warning(
+                    "Attempt %d/3 failed: %s",
+                    attempt + 1,
+                    exc,
+                )
+
+                if attempt == 2:
+                    logging.error(
+                        "All retries failed."
+                    )
+                    return []

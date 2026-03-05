@@ -16,3 +16,6 @@ __pycache__/
 
 # Mac
 .DS_Store
+
+# Token File
+fyllo_token.txt

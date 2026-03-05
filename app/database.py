@@ -3,7 +3,6 @@ Database utility functions for storing processed alerts.
 """
 
 import psycopg2
-from psycopg2.extras import RealDictCursor
 import logging
 from datetime import datetime, UTC
 
@@ -26,6 +25,16 @@ def initialize_database(database_url: str) -> None:
         )
         """
     )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS deployment_state (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+        """
+    )
+
     connection.commit()
     cursor.close()
     connection.close()
@@ -49,13 +58,7 @@ def is_alert_processed(database_url: str, alert_id: str) -> bool:
     return result is not None
 
 
-def mark_alert_processed(
-    database_url: str,
-    alert_id: str,
-    plot_id: str,
-    notif_type_id: int,
-    alert_date: str,
-) -> None:
+def mark_alert_processed(database_url: str, alert_id: str, plot_id: str,notif_type_id: int, alert_date: str) -> None:
     """
     Insert processed alert into database.
     """
@@ -81,17 +84,28 @@ def mark_alert_processed(
         connection.close()
 
 
-def is_database_empty(database_url: str) -> bool:
+def is_first_deployment(database_url: str) -> bool:
     connection = psycopg2.connect(database_url)
     cursor = connection.cursor()
+    cursor.execute(
+        "SELECT value FROM deployment_state WHERE key = 'initialized'"
+    )
+    result = cursor.fetchone()
+    cursor.close()
+    connection.close()
+    return result is None
 
-    cursor.execute("SELECT COUNT(*) FROM processed_alerts")
-    count = cursor.fetchone()[0]
 
+def mark_first_deployment_done(database_url: str) -> None:
+    connection = psycopg2.connect(database_url)
+    cursor = connection.cursor()
+    cursor.execute(
+        "INSERT INTO deployment_state (key, value) VALUES ('initialized', 'true') ON CONFLICT DO NOTHING"
+    )
+    connection.commit()
     cursor.close()
     connection.close()
 
-    return count == 0
 
 def get_latest_processed_date(database_url: str) -> str | None:
     connection = psycopg2.connect(database_url)
