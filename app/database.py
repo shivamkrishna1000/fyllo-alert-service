@@ -3,15 +3,19 @@ Database utility functions for storing processed alerts.
 """
 
 import psycopg2
-import logging
-from datetime import datetime, UTC
 
 
-def initialize_database(database_url: str) -> None:
+def get_connection(database_url: str):
+    """
+    Create a database connection.
+    """
+    return psycopg2.connect(database_url)
+
+
+def initialize_database(connection) -> None:
     """
     Create sent_alerts table if it does not exist.
     """
-    connection = psycopg2.connect(database_url)
     cursor = connection.cursor()
 
     cursor.execute(
@@ -51,14 +55,12 @@ def initialize_database(database_url: str) -> None:
 
     connection.commit()
     cursor.close()
-    connection.close()
 
 
-def is_alert_processed(database_url: str, alert_id: str) -> bool:
+def is_alert_processed(connection, alert_id: str) -> bool:
     """
     Check whether an alert has already been processed.
     """
-    connection = psycopg2.connect(database_url)
     cursor = connection.cursor()
     cursor.execute(
         "SELECT 1 FROM processed_alerts WHERE alert_id = %s",
@@ -67,16 +69,14 @@ def is_alert_processed(database_url: str, alert_id: str) -> bool:
     result = cursor.fetchone()
 
     cursor.close()
-    connection.close()
 
     return result is not None
 
 
-def mark_alert_processed(database_url: str, alert_id: str, plot_id: str,notif_type_id: int, alert_date: str) -> None:
+def mark_alert_processed(connection, alert_id: str, plot_id: str,notif_type_id: int, alert_date: str) -> None:
     """
     Insert processed alert into database.
     """
-    connection = psycopg2.connect(database_url)
     cursor = connection.cursor()
 
     try:
@@ -95,50 +95,42 @@ def mark_alert_processed(database_url: str, alert_id: str, plot_id: str,notif_ty
 
     finally:
         cursor.close()
-        connection.close()
 
 
-def is_first_deployment(database_url: str) -> bool:
-    connection = psycopg2.connect(database_url)
+def is_first_deployment(connection) -> bool:
     cursor = connection.cursor()
     cursor.execute(
         "SELECT value FROM deployment_state WHERE key = 'initialized'"
     )
     result = cursor.fetchone()
     cursor.close()
-    connection.close()
     return result is None
 
 
-def mark_first_deployment_done(database_url: str) -> None:
-    connection = psycopg2.connect(database_url)
+def mark_first_deployment_done(connection) -> None:
     cursor = connection.cursor()
     cursor.execute(
         "INSERT INTO deployment_state (key, value) VALUES ('initialized', 'true') ON CONFLICT DO NOTHING"
     )
     connection.commit()
     cursor.close()
-    connection.close()
 
 
-def get_latest_processed_date(database_url: str) -> str | None:
-    connection = psycopg2.connect(database_url)
+def get_latest_processed_date(connection) -> str | None:
     cursor = connection.cursor()
 
     cursor.execute("SELECT MAX(alert_date) FROM processed_alerts")
     result = cursor.fetchone()[0]
 
     cursor.close()
-    connection.close()
 
     return result
 
 
-def delete_old_processed_alerts(database_url: str, retention_days: int = 60) -> None:
+def delete_old_processed_alerts(connection, retention_days: int = 60) -> None:
     """
     Delete processed alerts older than retention_days.
     """
-    connection = psycopg2.connect(database_url)
     cursor = connection.cursor()
 
     cursor.execute(
@@ -152,12 +144,10 @@ def delete_old_processed_alerts(database_url: str, retention_days: int = 60) -> 
     connection.commit()
 
     cursor.close()
-    connection.close()
 
 
-def insert_sent_notification(database_url: str, alert_id: str, farmer_name: str, mobile_number: str, plot_id: str, message: str) -> None:
+def insert_sent_notification(connection, alert_id: str, farmer_name: str, mobile_number: str, plot_id: str, message: str) -> None:
 
-    connection = psycopg2.connect(database_url)
     cursor = connection.cursor()
 
     cursor.execute(
@@ -172,4 +162,3 @@ def insert_sent_notification(database_url: str, alert_id: str, farmer_name: str,
     connection.commit()
 
     cursor.close()
-    connection.close()

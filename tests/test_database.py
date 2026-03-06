@@ -8,6 +8,8 @@ from app.database import (
     initialize_database,
     is_alert_processed,
     mark_alert_processed,
+    delete_old_processed_alerts,
+    get_connection,
 )
 
 
@@ -20,34 +22,35 @@ def test_alert_mark_and_check():
 
     load_environment()
     database_url = os.environ.get("TEST_DATABASE_URL")
+    connection = get_connection(database_url)
 
-    from app.database import delete_old_processed_alerts
-
-    initialize_database(database_url)
-    delete_old_processed_alerts(database_url, retention_days=0)
+    initialize_database(connection)
+    delete_old_processed_alerts(connection, retention_days=0)
 
     alert_id = "test-alert-123"
 
-    assert is_alert_processed(database_url, alert_id) is False
+    assert is_alert_processed(connection, alert_id) is False
 
     mark_alert_processed(
-        database_url=database_url,
+        connection=connection,
         alert_id=alert_id,
         plot_id="plot-1",
         notif_type_id=1,
         alert_date=datetime.now(UTC),
     )
 
-    assert is_alert_processed(database_url, alert_id) is True
+    assert is_alert_processed(connection, alert_id) is True
+
+    connection.close()
 
 
 def test_duplicate_alert_not_inserted():
     load_environment()
     database_url = os.environ.get("TEST_DATABASE_URL")
+    connection = get_connection(database_url)
 
-    from app.database import delete_old_processed_alerts
-    initialize_database(database_url)
-    delete_old_processed_alerts(database_url, retention_days=0)
+    initialize_database(connection)
+    delete_old_processed_alerts(connection, retention_days=0)
 
     from datetime import datetime, UTC
 
@@ -55,7 +58,7 @@ def test_duplicate_alert_not_inserted():
 
     # Insert first time
     mark_alert_processed(
-        database_url=database_url,
+        connection=connection,
         alert_id=alert_id,
         plot_id="plot-1",
         notif_type_id=1,
@@ -64,17 +67,13 @@ def test_duplicate_alert_not_inserted():
 
     # Insert second time (should NOT create new row)
     mark_alert_processed(
-        database_url=database_url,
+        connection=connection,
         alert_id=alert_id,
         plot_id="plot-1",
         notif_type_id=1,
         alert_date=datetime.now(UTC),
     )
 
-    # Count rows with this alert_id
-    import psycopg2
-
-    connection = psycopg2.connect(database_url)
     cursor = connection.cursor()
 
     cursor.execute(

@@ -6,6 +6,8 @@ from app.database import (
     initialize_database,
     delete_old_processed_alerts,
     is_alert_processed,
+    mark_alert_processed,
+    get_connection,
 )
 from app.main import process_alerts
 
@@ -13,10 +15,11 @@ from app.main import process_alerts
 def test_process_alerts_flow():
     load_environment()
     database_url = os.environ.get("TEST_DATABASE_URL")
+    connection = get_connection(database_url)
 
     # Ensure table exists and is clean
-    initialize_database(database_url)
-    delete_old_processed_alerts(database_url, retention_days=0)
+    initialize_database(connection)
+    delete_old_processed_alerts(connection, retention_days=0)
 
     # We will add test alerts
     now = datetime.now(UTC)
@@ -57,9 +60,8 @@ def test_process_alerts_flow():
         },
     ]
 
-    from app.database import mark_alert_processed
 
-    mark_alert_processed(database_url=database_url, alert_id="alert-3", plot_id="plot-B", notif_type_id=1, alert_date=now)
+    mark_alert_processed(connection, alert_id="alert-3", plot_id="plot-B", notif_type_id=1, alert_date=now)
 
     plot_farmer_map = {
         "plot-A": {
@@ -77,7 +79,7 @@ def test_process_alerts_flow():
     }
 
     # Call the function under test
-    messages = process_alerts(alerts, database_url, plot_farmer_map)
+    messages = process_alerts(alerts, connection, plot_farmer_map)
 
     # Only alert-1 and alert-4 should be processed
     assert len(messages) == 2
@@ -91,8 +93,8 @@ def test_process_alerts_flow():
     assert "plot-B" not in returned_plots
 
     # Verify DB state
-    assert is_alert_processed(database_url, "alert-1") is True
-    assert is_alert_processed(database_url, "alert-4") is True
+    assert is_alert_processed(connection, "alert-1") is True
+    assert is_alert_processed(connection, "alert-4") is True
 
     # Expired alert should not be stored
-    assert is_alert_processed(database_url, "alert-2") is False
+    assert is_alert_processed(connection, "alert-2") is False

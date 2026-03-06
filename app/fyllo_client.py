@@ -46,32 +46,22 @@ class FylloClient:
             self.login()
 
         return {"Authorization": f"Bearer {self.token}"}
+    
+                
+    def fetch_plot_live_data(self, plot_id: str, notification_last_seen: str | None = None) -> Dict[str, Any]:
 
-    def fetch_recent_alerts(self, since: str | None = None, limit: int = 200, skip: int = 0) -> List[Dict[str, Any]]:
-
-        url = f"{self.base_url}/app-notifs"
-
-        where_clause = {
-            "farmUserId": get_farm_user_id()
-        }
-
-        if since:
-            where_clause["date"] = {"gte": since}
-
-        filter_query = {
-            "where": where_clause,
-            "order": ["date ASC"],
-            "limit": limit,
-            "skip": skip,
-        }
+        url = f"{self.base_url}/plots/{plot_id}/live-data"
 
         for attempt in range(3):
             try:
+                params = {}
+                if notification_last_seen:
+                    params["notificationLastSeen"] = notification_last_seen
 
                 response = requests.get(
                     url,
                     headers=self._get_headers(),
-                    params={"filter": json.dumps(filter_query)},
+                    params=params,
                     timeout=10,
                 )
 
@@ -82,7 +72,7 @@ class FylloClient:
                     response = requests.get(
                         url,
                         headers=self._get_headers(),
-                        params={"filter": json.dumps(filter_query)},
+                        params=params,
                         timeout=10,
                     )
 
@@ -99,10 +89,8 @@ class FylloClient:
                 )
 
                 if attempt == 2:
-                    logging.error(
-                        "All retries failed."
-                    )
-                    return []
+                    logging.error("All retries failed.")
+                    return {}
                 
     def fetch_plots(self) -> List[Dict[str, Any]]:
 

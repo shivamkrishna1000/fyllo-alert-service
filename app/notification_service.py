@@ -2,7 +2,7 @@ from typing import Dict
 from app.database import insert_sent_notification
 from app.config import get_database_url
 
-def send_notification(message: Dict) -> None:
+def send_notification(connection, message: Dict) -> None:
     """
     Placeholder for WhatsApp (WATI) integration.
     Currently just prints.
@@ -16,7 +16,7 @@ def send_notification(message: Dict) -> None:
     database_url = get_database_url()
 
     insert_sent_notification(
-        database_url=database_url,
+        connection=connection,
         alert_id=message["alert_id"],
         farmer_name=message["farmer_name"],
         mobile_number=message["mobile_number"],
