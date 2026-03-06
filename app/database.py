@@ -35,6 +35,20 @@ def initialize_database(database_url: str) -> None:
         """
     )
 
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sent_notifications (
+            id SERIAL PRIMARY KEY,
+            alert_id TEXT,
+            farmer_name TEXT,
+            mobile_number TEXT,
+            plot_id TEXT,
+            message TEXT,
+            sent_at TIMESTAMP
+        )
+        """
+    )
+
     connection.commit()
     cursor.close()
     connection.close()
@@ -133,6 +147,26 @@ def delete_old_processed_alerts(database_url: str, retention_days: int = 60) -> 
         WHERE processed_at < NOW() - INTERVAL %s
         """,
         (f"{retention_days} days",),
+    )
+
+    connection.commit()
+
+    cursor.close()
+    connection.close()
+
+
+def insert_sent_notification(database_url: str, alert_id: str, farmer_name: str, mobile_number: str, plot_id: str, message: str) -> None:
+
+    connection = psycopg2.connect(database_url)
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO sent_notifications
+        (alert_id, farmer_name, mobile_number, plot_id, message, sent_at)
+        VALUES (%s, %s, %s, %s, %s, NOW())
+        """,
+        (alert_id, farmer_name, mobile_number, plot_id, message),
     )
 
     connection.commit()

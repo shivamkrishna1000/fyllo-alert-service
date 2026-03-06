@@ -47,12 +47,7 @@ class FylloClient:
 
         return {"Authorization": f"Bearer {self.token}"}
 
-    def fetch_recent_alerts(
-        self,
-        since: str | None = None,
-        limit: int = 200,
-        skip: int = 0
-    ) -> List[Dict[str, Any]]:
+    def fetch_recent_alerts(self, since: str | None = None, limit: int = 200, skip: int = 0) -> List[Dict[str, Any]]:
 
         url = f"{self.base_url}/app-notifs"
 
@@ -107,4 +102,43 @@ class FylloClient:
                     logging.error(
                         "All retries failed."
                     )
+                    return []
+                
+    def fetch_plots(self) -> List[Dict[str, Any]]:
+
+        url = f"{self.base_url}/plots"
+
+        for attempt in range(3):
+            try:
+
+                response = requests.get(
+                    url,
+                    headers=self._get_headers(),
+                    timeout=10,
+                )
+
+                if response.status_code == 401:
+                    logging.info("Token expired. Re-authenticating.")
+                    self.login()
+
+                    response = requests.get(
+                        url,
+                        headers=self._get_headers(),
+                        timeout=10,
+                    )
+
+                response.raise_for_status()
+
+                return response.json()
+
+            except requests.RequestException as exc:
+
+                logging.warning(
+                    "Attempt %d/3 failed: %s",
+                    attempt + 1,
+                    exc,
+                )
+
+                if attempt == 2:
+                    logging.error("All retries failed.")
                     return []

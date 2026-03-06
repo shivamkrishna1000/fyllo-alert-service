@@ -38,7 +38,7 @@ def convert_utc_to_ist(utc_string: str) -> str:
     dt_ist = dt.astimezone(IST)
     return dt_ist.strftime("%d-%m-%Y %I:%M %p")
 
-def process_alerts(alerts: List[Dict[str, Any]], database_url: str) -> List[Dict[str, Any]]:
+def process_alerts(alerts: List[Dict[str, Any]], database_url: str, plot_farmer_map: Dict[str, Dict[str, str]]) -> List[Dict[str, Any]]:
     grouped_alerts = defaultdict(list)
     messages_to_send: List[Dict[str, Any]] = []
 
@@ -64,7 +64,12 @@ def process_alerts(alerts: List[Dict[str, Any]], database_url: str) -> List[Dict
             simplified_text = simplify_alert_text(alert["text"])
             date_str = convert_utc_to_ist(alert["date"])
 
+            farmer = plot_farmer_map.get(plot_id, {})
+
             messages_to_send.append({
+                "alert_id": alert["id"],
+                "farmer_name": farmer.get("farmer_name"),
+                "mobile_number": farmer.get("mobile_number"),
                 "plot_id": plot_id,
                 "date": date_str,
                 "message": simplified_text,
@@ -89,7 +94,24 @@ def main() -> None:
         if not base_url:
             raise ValueError("FYLLO_BASE_URL is not set")
         client = FylloClient(base_url)
-        
+        # Fetch plots and build plot → farmer mapping
+        plots = client.fetch_plots()
+
+        plot_farmer_map = {}
+
+        for plot in plots:
+            plot_id = plot.get("plotId")
+            farmer_name = plot.get("farmerName")
+            mobile_number = plot.get("farmerMobile")
+            if mobile_number and not mobile_number.startswith("91"):
+                mobile_number = "91" + mobile_number
+
+            if plot_id:
+                plot_farmer_map[plot_id] = {
+                    "farmer_name": farmer_name,
+                    "mobile_number": mobile_number,
+                }
+
         database_url = get_database_url()
         if not database_url:
             raise ValueError("DATABASE_URL is not set")
@@ -139,7 +161,7 @@ def main() -> None:
             mark_first_deployment_done(database_url)
             return
     
-        messages = process_alerts(alerts, database_url)
+        messages = process_alerts(alerts, database_url, plot_farmer_map)
 
         for message in messages:
             send_notification(message)

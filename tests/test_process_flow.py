@@ -59,16 +59,25 @@ def test_process_alerts_flow():
 
     from app.database import mark_alert_processed
 
-    mark_alert_processed(
-        database_url=database_url,
-        alert_id="alert-3",
-        plot_id="plot-B",
-        notif_type_id=1,
-        alert_date=now,
-    )
+    mark_alert_processed(database_url=database_url, alert_id="alert-3", plot_id="plot-B", notif_type_id=1, alert_date=now)
+
+    plot_farmer_map = {
+        "plot-A": {
+            "farmer_name": "Test Farmer A",
+            "mobile_number": "919999999999"
+        },
+        "plot-B": {
+            "farmer_name": "Test Farmer B",
+            "mobile_number": "918888888888"
+        },
+        "plot-C": {
+            "farmer_name": "Test Farmer C",
+            "mobile_number": "917777777777"
+        }
+    }
 
     # Call the function under test
-    messages = process_alerts(alerts, database_url)
+    messages = process_alerts(alerts, database_url, plot_farmer_map)
 
     # Only alert-1 and alert-4 should be processed
     assert len(messages) == 2
