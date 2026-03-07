@@ -15,7 +15,7 @@ def get_fyllo_base_url() -> str:
     return os.environ.get("FYLLO_BASE_URL")
 
 def get_database_url() -> str:
-    """Return SQLite database path."""
+    """Return Neon database path."""
     return os.environ.get("DATABASE_URL")
 
 def get_farm_user_id() -> str:

@@ -84,7 +84,7 @@ def test_process_alerts_flow():
     # Only alert-1 and alert-4 should be processed
     assert len(messages) == 2
 
-    returned_plots = {msg["plot_id"] for msg in messages}
+    returned_plots = {msg["alert"]["plotId"] for msg in messages}
 
     assert "plot-A" in returned_plots
     assert "plot-C" in returned_plots

@@ -23,20 +23,13 @@ from app.database import (
     get_connection,
 )
 from app.fyllo_client import FylloClient
-from app.alert_processor import is_alert_valid, simplify_alert_text
+from app.alert_processor import is_alert_valid
 
 
 logging.basicConfig(
    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
-
-IST = timezone(timedelta(hours=5, minutes=30))
-
-def convert_utc_to_ist(utc_string: str) -> str:
-    dt = datetime.fromisoformat(utc_string.replace("Z", "+00:00"))
-    dt_ist = dt.astimezone(IST)
-    return dt_ist.strftime("%d-%m-%Y %I:%M %p")
 
 def process_alerts(alerts: List[Dict[str, Any]], connection, plot_farmer_map: Dict[str, Dict[str, str]]) -> List[Dict[str, Any]]:
     grouped_alerts = defaultdict(list)
@@ -61,18 +54,11 @@ def process_alerts(alerts: List[Dict[str, Any]], connection, plot_farmer_map: Di
         print("----------------------------------")
 
         for alert in plot_alerts:
-            simplified_text = simplify_alert_text(alert["text"])
-            date_str = convert_utc_to_ist(alert["date"])
-
             farmer = plot_farmer_map.get(plot_id, {})
 
             messages_to_send.append({
-                "alert_id": alert["id"],
-                "farmer_name": farmer.get("farmer_name"),
-                "mobile_number": farmer.get("mobile_number"),
-                "plot_id": plot_id,
-                "date": date_str,
-                "message": simplified_text,
+                "alert": alert,
+                "farmer": farmer
             })
 
             mark_alert_processed(
@@ -151,7 +137,7 @@ def main() -> None:
             print("First deployment detected. Marking existing alerts as processed without sending.")
             for alert in alerts:
                 mark_alert_processed(
-                    database_url=database_url,
+                    connection=connection,
                     alert_id=alert["id"],
                     plot_id=alert.get("plotId"),
                     alert_date=datetime.fromisoformat(alert["date"].replace("Z", "+00:00")),
@@ -162,8 +148,12 @@ def main() -> None:
     
         messages = process_alerts(alerts, connection, plot_farmer_map)
 
-        for message in messages:
-            send_notification(connection, message)
+        for alert_data in messages:
+            send_notification(
+                connection,
+                alert_data["alert"],
+                alert_data["farmer"]
+            )
 
         # Maintenance cleanup
         delete_old_processed_alerts(connection, retention_days=60)

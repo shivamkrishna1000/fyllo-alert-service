@@ -1,25 +1,27 @@
 from typing import Dict
 from app.database import insert_sent_notification
-from app.config import get_database_url
 
-def send_notification(connection, message: Dict) -> None:
+def send_notification(connection, alert: Dict, farmer: Dict) -> None:
     """
     Placeholder for WhatsApp (WATI) integration.
     Currently just prints.
     Later will call WATI API.
     """
-    print("\n--- Sending Notification ---")
-    print(f"Plot ID: {message['plot_id']}")
-    print(f"Date: {message['date']}")
-    print(f"Message: {message['message']}")
+    farmer_name = farmer.get("farmer_name")
+    mobile_number = farmer.get("mobile_number")
+    plot_id = alert.get("plotId")
+    alert_id = alert.get("id")
 
-    database_url = get_database_url()
+    print("\n--- Sending Notification ---")
+    print(f"Plot ID: {plot_id}")
+    print(f"Date: {alert['date']}")
+    print(f"Message: {alert['text']}")
 
     insert_sent_notification(
         connection=connection,
-        alert_id=message["alert_id"],
-        farmer_name=message["farmer_name"],
-        mobile_number=message["mobile_number"],
-        plot_id=message["plot_id"],
-        message=message["message"],
+        alert_id=alert_id,
+        farmer_name=farmer_name,
+        mobile_number=mobile_number,
+        plot_id=plot_id,
+        message=alert["text"],
     )
