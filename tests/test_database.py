@@ -35,6 +35,7 @@ def test_alert_mark_and_check():
         connection=connection,
         alert_id=alert_id,
         plot_id="plot-1",
+        alert_text="Test message",
         notif_type_id=1,
         alert_date=datetime.now(UTC),
     )
@@ -61,6 +62,7 @@ def test_duplicate_alert_not_inserted():
         connection=connection,
         alert_id=alert_id,
         plot_id="plot-1",
+        alert_text="Test message",
         notif_type_id=1,
         alert_date=datetime.now(UTC),
     )
@@ -70,6 +72,7 @@ def test_duplicate_alert_not_inserted():
         connection=connection,
         alert_id=alert_id,
         plot_id="plot-1",
+        alert_text="Test message",
         notif_type_id=1,
         alert_date=datetime.now(UTC),
     )

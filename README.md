@@ -1,35 +1,74 @@
-# Fyllo Alert Notification Service
+---
 
-This service fetches live alerts from Fyllo sensor APIs and prepares notifications for farmers.  
-The goal is to automatically send important alerts (e.g., irrigation requirement, crop stage issues, etc.) to farmers through WhatsApp using WATI.
+## Design Overview
 
-Currently the system:
-- Fetches live alerts from Fyllo sensors installed in R&D plots
-- Filters valid alerts
-- Prevents duplicate notifications
-- Maps each plot to the correct farmer
-- Generates notification messages
-- Stores processed alerts in the database
+### 1. Architecture
+
+The system follows a **functional core + imperative shell** design:
+
+- Functional Core:
+  - `alert_processor.py`
+  - Contains deterministic logic for:
+    - alert validation
+    - rule evaluation
+    - message generation
+
+- Imperative Shell:
+  - `main.py`, `fyllo_client.py`, `notification_service.py`, `database.py`
+  - Handles:
+    - API calls
+    - database operations
+    - external integrations
+
+This separation ensures that core logic is testable, predictable, and free of side effects.
 
 ---
 
-## Setup
+### 2. Processing Pipeline
 
-1. Clone the repository
+Alert processing follows a clear pipeline:
 
-2. Create environment file:
-   cp .env.example .env
+1. Fetch alerts from Fyllo API
+2. Filter and validate alerts
+3. Group alerts by plot
+4. Apply rule engine to generate advisories
+5. Format messages for each farmer
+6. Send notifications and store results
 
-3. Fill in required environment variables
+Each step is implemented as a separate function to maintain modularity.
 
-4. Install dependencies:
-   pip install -r requirements.txt
+---
 
-5. Run Postgres locally
-   docker compose up -d
+### 3. Key Design Decisions
 
-5. Run tests:
-   pytest
+#### a. Separation of Concerns
+- Validation, rule evaluation, and formatting are separated into different functions.
+- This avoids large monolithic functions and improves maintainability.
 
-6. Run service:
-   python -m app.main
+#### b. Pure Functions for Core Logic
+- Core processing functions do not perform database operations.
+- All side effects are handled outside the core logic.
+
+#### c. Extensibility
+- Message generation is modular (`build_single_plot_message`)
+- Allows future integration of AI-based message formatting without changing core logic.
+
+#### d. Testability
+- Core logic is deterministic and independent of external systems.
+- Enables reliable unit testing with high coverage.
+
+---
+
+### 4. Trade-offs
+
+- Processed alerts are loaded into memory as a set for duplicate checking.
+  - Improves simplicity and performance for current scale
+  - May require optimization for very large datasets
+
+---
+
+### 5. Future Improvements
+
+- Introduce stricter typing (TypedDict / dataclasses)
+- Add structured logging instead of print statements
+- Optimize duplicate check using indexed queries if scale increases

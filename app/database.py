@@ -24,17 +24,9 @@ def initialize_database(connection) -> None:
             alert_id TEXT PRIMARY KEY,
             plot_id TEXT,
             notif_type_id INTEGER,
+            alert_text TEXT,
             alert_date TIMESTAMP,
             processed_at TIMESTAMP
-        )
-        """
-    )
-
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS deployment_state (
-            key TEXT PRIMARY KEY,
-            value TEXT
         )
         """
     )
@@ -49,6 +41,22 @@ def initialize_database(connection) -> None:
             plot_id TEXT,
             message TEXT,
             sent_at TIMESTAMP
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS rejected_alerts (
+            id SERIAL PRIMARY KEY,
+            alert_id TEXT,
+            plot_id TEXT,
+            notif_type_id INTEGER,
+            reason TEXT,
+            alert_text TEXT,
+            alert_date TIMESTAMP,
+            rejected_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE (alert_id, reason)
         )
         """
     )
@@ -73,7 +81,7 @@ def is_alert_processed(connection, alert_id: str) -> bool:
     return result is not None
 
 
-def mark_alert_processed(connection, alert_id: str, plot_id: str,notif_type_id: int, alert_date: str) -> None:
+def mark_alert_processed(connection, alert_id: str, plot_id: str,notif_type_id: int, alert_text: str, alert_date: str) -> None:
     """
     Insert processed alert into database.
     """
@@ -83,10 +91,10 @@ def mark_alert_processed(connection, alert_id: str, plot_id: str,notif_type_id: 
         cursor.execute(
             """
             INSERT INTO processed_alerts 
-            (alert_id, plot_id, notif_type_id, alert_date, processed_at)
-            VALUES (%s, %s, %s, %s, NOW())
+            (alert_id, plot_id, notif_type_id, alert_text, alert_date, processed_at)
+            VALUES (%s, %s, %s, %s, %s, NOW())
             """,
-            (alert_id, plot_id, notif_type_id, alert_date),
+            (alert_id, plot_id, notif_type_id, alert_text, alert_date),
         )
         connection.commit()
 
@@ -97,23 +105,28 @@ def mark_alert_processed(connection, alert_id: str, plot_id: str,notif_type_id: 
         cursor.close()
 
 
-def is_first_deployment(connection) -> bool:
+def insert_rejected_alert(connection, alert_id: str, plot_id: str, notif_type_id: int, reason: str, alert_text: str, alert_date) -> None:
+    """
+    Insert a rejected alert into rejected_alerts table.
+    """
     cursor = connection.cursor()
-    cursor.execute(
-        "SELECT value FROM deployment_state WHERE key = 'initialized'"
-    )
-    result = cursor.fetchone()
-    cursor.close()
-    return result is None
 
+    try:
+        cursor.execute(
+            """
+            INSERT INTO rejected_alerts
+            (alert_id, plot_id, notif_type_id, reason, alert_text, alert_date)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (alert_id, plot_id, notif_type_id, reason, alert_text, alert_date),
+        )
+        connection.commit()
 
-def mark_first_deployment_done(connection) -> None:
-    cursor = connection.cursor()
-    cursor.execute(
-        "INSERT INTO deployment_state (key, value) VALUES ('initialized', 'true') ON CONFLICT DO NOTHING"
-    )
-    connection.commit()
-    cursor.close()
+    except psycopg2.errors.UniqueViolation:
+        connection.rollback()
+
+    finally:
+        cursor.close()
 
 
 def get_latest_processed_date(connection) -> str | None:
@@ -162,3 +175,17 @@ def insert_sent_notification(connection, alert_id: str, farmer_name: str, mobile
     connection.commit()
 
     cursor.close()
+
+def get_processed_alert_ids(connection):
+    """
+    Fetch all processed alert IDs from database.
+    """
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT alert_id FROM processed_alerts")
+
+    rows = cursor.fetchall()
+
+    cursor.close()
+
+    return {row[0] for row in rows}

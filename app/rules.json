@@ -1,0 +1,99 @@
+[
+    {
+        "trigger": "rain_alert",
+        "priority": 1,
+        "condition": "always",
+        "message": "Rain is expected in your area today. Avoid irrigation."
+    },
+
+    {
+        "trigger": "irrigation",
+        "priority": 2,
+        "condition": "rain_alert",
+        "message": "Soil moisture is low, but rain is expected today. Wait for rainfall before irrigating your plot."
+    },
+
+    {
+        "trigger": "irrigation",
+        "priority": 2,
+        "condition": "rain_prob_gt_60",
+        "message": "Soil moisture is low, but rain is likely today. Wait for rainfall before irrigating your plot."
+    },
+
+    {
+        "trigger": "irrigation",
+        "priority": 2,
+        "condition": "rain_prob_30_60",
+        "message": "Soil moisture is low. Rain may occur today, monitor weather before irrigating."
+    },
+
+    {
+        "trigger": "irrigation",
+        "priority": 2,
+        "condition": "rain_prob_lt_30",
+        "message": "Soil moisture is low in your plot. Irrigation is recommended today."
+    },
+
+    {
+        "trigger": "high_soil_temp",
+        "priority": 3,
+        "condition": "rain_alert",
+        "message": "Soil temperature is high, but rain is expected today which may cool the soil. Monitor soil conditions."
+    },
+
+    {
+        "trigger": "high_soil_temp",
+        "priority": 3,
+        "condition": "rain_prob_gt_60",
+        "message": "Soil temperature is high, but rain is likely today which may cool the soil. Monitor soil moisture."
+    },
+
+    {
+        "trigger": "high_soil_temp",
+        "priority": 3,
+        "condition": "rain_prob_30_60",
+        "message": "Soil temperature is high and rain may occur today. Monitor soil moisture."
+    },
+
+    {
+        "trigger": "high_soil_temp",
+        "priority": 3,
+        "condition": "rain_prob_lt_30",
+        "message": "Soil temperature is high in your plot. Monitor soil moisture and irrigate if required."
+    },
+
+    {
+        "trigger": "low_soil_temp",
+        "priority": 3,
+        "condition": "rain_alert",
+        "message": "Soil temperature is low and rain is expected today. Monitor crop growth and soil conditions."
+    },
+
+    {
+        "trigger": "low_soil_temp",
+        "priority": 3,
+        "condition": "rain_prob_gt_60",
+        "message": "Soil temperature is low and rain is likely today. Monitor crop growth and soil conditions."
+    },
+
+    {
+        "trigger": "low_soil_temp",
+        "priority": 3,
+        "condition": "rain_prob_30_60",
+        "message": "Soil temperature is low and rain may occur today. Monitor crop growth and soil conditions."
+    },
+
+    {
+        "trigger": "low_soil_temp",
+        "priority": 3,
+        "condition": "rain_prob_lt_30",
+        "message": "Soil temperature is lower than optimal levels. Monitor crop growth and soil conditions."
+    },
+
+    {
+        "trigger": "high_wind",
+        "priority": 4,
+        "condition": "always",
+        "message": "High wind conditions expected today. Avoid pesticide spraying to prevent drift."
+    }
+]
