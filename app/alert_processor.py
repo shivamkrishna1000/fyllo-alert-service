@@ -3,15 +3,12 @@ Alert processing logic.
 """
 
 from datetime import datetime, UTC
-from typing import List, Any, Dict
 from collections import defaultdict
 from app.database import (
     insert_rejected_alert,
     get_processed_alert_ids
 )
-import json
-import os
-
+from app.config import load_rules
 from typing import TypedDict, List, Dict, Any
 
 class Alert(TypedDict, total=False):
@@ -34,17 +31,25 @@ class Farmer(TypedDict, total=False):
     farmer_name: str
     mobile_number: str
 
+class AlertMeta(TypedDict):
+    id: str
+    notifTypeId: int | None
+    date: str | None
+
+class AlertPayload(TypedDict):
+    alerts: List[AlertMeta]
+    plotId: str
+    text: str
+
 class PlotMessage(TypedDict):
-    alert: Dict[str, Any]
+    alert: AlertPayload
     farmer: Farmer
 
+class Rule(TypedDict):
+    trigger: str
+    condition: str
+    message: str
 
-def load_rules():
-    current_dir = os.path.dirname(__file__)
-    file_path = os.path.join(current_dir, "rules.json")
-
-    with open(file_path, "r") as f:
-        return json.load(f)
     
 def is_supported_alert(notif_type_id: int) -> bool:
     return notif_type_id in ALERT_TYPE_MAP
@@ -54,7 +59,7 @@ def is_duplicate_alert(alert_id: str, processed_alert_ids: set) -> bool:
     return alert_id in processed_alert_ids
 
 
-def is_expired_alert(alert: Dict[str, Any]) -> bool:
+def is_expired_alert(alert: Alert) -> bool:
     return not is_alert_valid(alert)
 
 
@@ -70,111 +75,112 @@ def build_rejected_alert(alert: Alert, reason: str) -> RejectedAlert:
         ),
     }
 
-def filter_and_validate_alerts(
-    alerts: List[Alert],
-    plot_sensor_map: Dict[str, Any],
-    processed_alert_ids: set
-) -> tuple[Dict[str, List[Alert]], List[RejectedAlert]]:
+def check_supported_alert(alert: Alert) -> tuple[bool, str | None]:
+    if not is_supported_alert(alert.get("notifTypeId")):
+        return False, "unsupported_alert_type"
+    return True, None
+
+
+def check_duplicate_alert(alert: Alert, processed_alert_ids: set) -> tuple[bool, str | None]:
+    if is_duplicate_alert(alert["id"], processed_alert_ids):
+        return False, "duplicate_alert"
+    return True, None
+
+
+def check_expired_alert(alert: Alert) -> tuple[bool, str | None]:
+    if is_expired_alert(alert):
+        return False, "expired_alert"
+    return True, None
+
+
+def check_sensor_validation(alert: Alert, sensors: Dict[str, Any]) -> tuple[bool, str | None]:
+    if not validate_sensor_conditions(alert, sensors):
+        return False, "sensor_validation_failed"
+    return True, None
+
+def validate_alert(alert: Alert, sensors: Dict[str, Any], processed_alert_ids: set) -> tuple[bool, str | None]:
+
+    validators = [
+        lambda: check_supported_alert(alert),
+        lambda: check_duplicate_alert(alert, processed_alert_ids),
+        lambda: check_expired_alert(alert),
+        lambda: check_sensor_validation(alert, sensors),
+    ]
+
+    for validate in validators:
+        is_valid, reason = validate()
+        if not is_valid:
+            return False, reason
+
+    return True, None
+
+def group_valid_alerts_by_plot(alerts: List[Alert], plot_sensor_map: Dict[str, Any], processed_alert_ids: set) -> tuple[Dict[str, List[Alert]], List[RejectedAlert]]:
     """
     Filter and validate incoming alerts.
-
-    Applies:
-    - Supported alert type check
-    - Duplicate alert check
-    - Expiry validation
-    - Sensor validation
-
-    Parameters
-    ----------
-    alerts : List[Dict]
-        Raw alerts
-    plot_sensor_map : Dict
-        Sensor data for each plot
-    processed_alert_ids : set
-        Set of already processed alert IDs
-
-    Returns
-    -------
-    Tuple[Dict[str, List[Dict]], List[Dict]]
-        grouped_alerts : valid alerts grouped by plot
-        rejected_alerts : list of rejected alerts with reasons
     """
     grouped_alerts = defaultdict(list)
     rejected_alerts = []
 
     for alert in alerts:
-        alert_id = alert["id"]
         plot_id = alert.get("plotId")
-        notif_type_id = alert.get("notifTypeId")
 
-        print("Checking alert:", alert_id)
+        sensors = plot_sensor_map.get(plot_id, {})
 
-        if not is_supported_alert(notif_type_id):
-            rejected_alerts.append(build_rejected_alert(alert, "unsupported_alert_type"))
-            continue
+        is_valid, reason = validate_alert(
+            alert=alert,
+            sensors=sensors,
+            processed_alert_ids=processed_alert_ids
+        )
 
-        if is_duplicate_alert(alert_id, processed_alert_ids):
-            rejected_alerts.append(build_rejected_alert(alert, "duplicate_alert"))
-            continue
-
-        if is_expired_alert(alert):
-            rejected_alerts.append(build_rejected_alert(alert, "expired_alert"))
-            continue
-
-        sensors = plot_sensor_map.get(plot_id)
-        if not validate_sensor_conditions(alert, sensors or {}):
-            rejected_alerts.append(build_rejected_alert(alert, "sensor_validation_failed"))
+        if not is_valid:
+            rejected_alerts.append(build_rejected_alert(alert, reason))
             continue
 
         grouped_alerts[plot_id].append(alert)
 
     return grouped_alerts, rejected_alerts
 
-def combine_messages(messages: List[str]) -> str:
+def merge_advisory_messages(messages: List[str]) -> str:
     """
     Combine multiple advisory messages into a single string.
     """
     return "\n\n".join(messages)
 
-def format_plot_message(plot_id: str, plot_alerts: List[Dict], message: str, farmer: Dict) -> Dict:
-    """
-    Format final message structure for notification service.
-    """
+def build_alert_payload(plot_id: str, plot_alerts: List[Alert], message: str) -> AlertPayload:
     return {
-        "alert": {
-            "alerts": [
-                {
-                    "id": alert["id"],
-                    "notifTypeId": alert.get("notifTypeId"),
-                    "date": alert.get("date")
-                }
-                for alert in plot_alerts
-            ],
-            "plotId": plot_id,
-            "text": message
-        },
-        "farmer": farmer
+        "alerts": [
+            {
+                "id": alert["id"],
+                "notifTypeId": alert.get("notifTypeId"),
+                "date": alert.get("date")
+            }
+            for alert in plot_alerts
+        ],
+        "plotId": plot_id,
+        "text": message
     }
 
-def build_single_plot_message(plot_id: str, plot_alerts: List[Alert], weather_data: Dict[str, Any], farmer: Farmer) -> PlotMessage | None:
+def generate_plot_notification(plot_id: str, plot_alerts: List[Alert], weather_data: Dict[str, Any], farmer: Farmer, rules_by_trigger: Dict[str, List[Rule]]) -> PlotMessage | None:
     """
     Generate message for a single plot.
     """
-    advisory_messages = evaluate_rules(plot_alerts, weather_data)
+    advisory_messages = generate_advisory_messages(plot_alerts, weather_data, rules_by_trigger)
 
     if not advisory_messages:
         return None
 
-    combined_message = combine_messages(advisory_messages)
+    combined_message = merge_advisory_messages(advisory_messages)
 
-    return format_plot_message(
-        plot_id=plot_id,
-        plot_alerts=plot_alerts,
-        message=combined_message,
-        farmer=farmer
-    )
+    return {
+        "alert": build_alert_payload(
+            plot_id=plot_id,
+            plot_alerts=plot_alerts,
+            message=combined_message,
+        ),
+        "farmer": farmer
+    }
 
-def build_messages_for_plots(grouped_alerts: Dict[str, List[Alert]], plot_weather_map: Dict[str, Any], plot_farmer_map: Dict[str, Farmer],) -> List[PlotMessage]:
+def generate_plot_notifications(grouped_alerts: Dict[str, List[Alert]], plot_weather_map: Dict[str, Any], plot_farmer_map: Dict[str, Farmer], rules_by_trigger: Dict[str, List[Rule]]) -> List[PlotMessage]:
     """
     Build notification messages for each plot using rule engine.
     """
@@ -182,19 +188,15 @@ def build_messages_for_plots(grouped_alerts: Dict[str, List[Alert]], plot_weathe
     messages_to_send: List[PlotMessage] = []
 
     for plot_id, plot_alerts in grouped_alerts.items():
-
-        print("\n----------------------------------")
-        print(f"Plot: {plot_id}")
-        print("----------------------------------")
-
         weather_data = plot_weather_map.get(plot_id)
         farmer = plot_farmer_map.get(plot_id, {})
 
-        message = build_single_plot_message(
+        message = generate_plot_notification(
             plot_id,
             plot_alerts,
             weather_data,
-            farmer
+            farmer,
+            rules_by_trigger
         )
 
         if message:
@@ -202,49 +204,7 @@ def build_messages_for_plots(grouped_alerts: Dict[str, List[Alert]], plot_weathe
 
     return messages_to_send
 
-def process_alerts(
-    alerts: List[Alert],
-    plot_weather_map: Dict[str, Any],
-    plot_sensor_map: Dict[str, Any],
-    connection,
-    plot_farmer_map: Dict[str, Farmer]
-) -> List[PlotMessage]:
-    """
-    Main orchestration function for alert processing.
-
-    Steps:
-    1. Fetch processed alert IDs from database
-    2. Filter and validate incoming alerts
-    3. Store rejected alerts
-    4. Generate advisory messages for valid alerts
-
-    Parameters
-    ----------
-    alerts : List[Dict]
-        Raw alerts fetched from Fyllo API
-    plot_weather_map : Dict
-        Weather forecast data for each plot
-    plot_sensor_map : Dict
-        Sensor readings for each plot
-    connection :
-        Database connection object
-    plot_farmer_map : Dict
-        Mapping of plot_id to farmer details
-
-    Returns
-    -------
-    List[Dict]
-        List of messages ready to be sent to farmers
-    """
-
-    processed_alert_ids = get_processed_alert_ids(connection)
-
-    grouped_alerts, rejected_alerts = filter_and_validate_alerts(
-        alerts=alerts,
-        plot_sensor_map=plot_sensor_map,
-        processed_alert_ids=processed_alert_ids
-    )
-
+def persist_rejected_alerts(connection, rejected_alerts: List[RejectedAlert]) -> None:
     for rejected in rejected_alerts:
         insert_rejected_alert(
             connection=connection,
@@ -256,10 +216,27 @@ def process_alerts(
             alert_date=rejected["alert_date"],
         )
 
-    messages_to_send = build_messages_for_plots(
+def process_and_generate_notifications(alerts: List[Alert], plot_weather_map: Dict[str, Any], plot_sensor_map: Dict[str, Any], connection, plot_farmer_map: Dict[str, Farmer]) -> List[PlotMessage]:
+    """
+    Main orchestration function for alert processing.
+    """
+    processed_alert_ids = get_processed_alert_ids(connection)
+    rule_table = load_rules()
+    rules_by_trigger = build_rules_by_trigger(rule_table)
+
+    grouped_alerts, rejected_alerts = group_valid_alerts_by_plot(
+        alerts=alerts,
+        plot_sensor_map=plot_sensor_map,
+        processed_alert_ids=processed_alert_ids
+    )
+
+    persist_rejected_alerts(connection, rejected_alerts)
+
+    messages_to_send = generate_plot_notifications(
         grouped_alerts=grouped_alerts,
         plot_weather_map=plot_weather_map,
         plot_farmer_map=plot_farmer_map,
+        rules_by_trigger=rules_by_trigger
     )
 
     return messages_to_send
@@ -282,16 +259,18 @@ TRIGGER_PRIORITY = {
     "high_wind": 5
 }
 
-RULE_TABLE = load_rules()
-RULES_BY_TRIGGER = {}
+def build_rules_by_trigger(rule_table: List[Rule]) -> Dict[str, List[Rule]]:
+    rules_by_trigger: Dict[str, List[Rule]] = {}
 
-for rule in RULE_TABLE:
-    trigger = rule["trigger"]
+    for rule in rule_table:
+        trigger = rule["trigger"]
 
-    if trigger not in RULES_BY_TRIGGER:
-        RULES_BY_TRIGGER[trigger] = []
+        if trigger not in rules_by_trigger:
+            rules_by_trigger[trigger] = []
 
-    RULES_BY_TRIGGER[trigger].append(rule)
+        rules_by_trigger[trigger].append(rule)
+
+    return rules_by_trigger
 
 CONDITIONS = {
     "always": lambda ctx: True,
@@ -301,8 +280,8 @@ CONDITIONS = {
     "rain_prob_lt_30": lambda ctx: ctx.get("rain_prob_lt_30"),
 }
 
-def validate_sensor_conditions(alert, sensors):
-
+def validate_sensor_conditions(alert: Alert, sensors: Dict[str, Any]) -> bool:
+    
     notif_type = alert.get("notifTypeId")
 
     soil_temp = sensors.get("soilTemp")
@@ -368,26 +347,9 @@ def validate_sensor_conditions(alert, sensors):
     # Rain / Wind do not require sensor validation
     return True
 
-def build_context(plot_alerts: List[Alert], weather_data: Dict[str, Any]) -> Dict[str, Any]:
+def build_rule_evaluation_context(plot_alerts: List[Alert], weather_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Build rule evaluation context from alerts and weather.
-
-    Creates boolean flags such as:
-    - irrigation
-    - rain_alert
-    - rain probability categories
-
-    Parameters
-    ----------
-    plot_alerts : List[Dict]
-        Alerts for a plot
-    weather_data : Dict
-        Weather forecast data
-
-    Returns
-    -------
-    Dict
-        Context dictionary used by rule engine
     """
 
     context = {
@@ -441,63 +403,46 @@ def build_context(plot_alerts: List[Alert], weather_data: Dict[str, Any]) -> Dic
 
     return context
 
+def does_rule_apply(rule: Rule, context: Dict[str, Any]) -> bool:
+    condition = rule["condition"]
+    condition_fn = CONDITIONS.get(condition)
 
-def evaluate_rules(plot_alerts: List[Alert], weather_data: Dict[str, Any]) -> List[str]:
+    if not condition_fn:
+        return False
+
+    return condition_fn(context)
+
+def select_message_for_trigger(trigger: str, context: Dict[str, Any], rules_by_trigger: Dict[str, List[Rule]]) -> str | None:
+
+    trigger_rules = rules_by_trigger.get(trigger, [])
+
+    for rule in trigger_rules:
+        if does_rule_apply(rule, context):
+            return rule["message"]
+
+    return None
+
+def generate_advisory_messages(plot_alerts: List[Alert], weather_data: Dict[str, Any], rules_by_trigger: Dict[str, List[Rule]]) -> List[str]:
     """
     Evaluate rule table to generate advisory messages.
-
-    Steps:
-    - Build context from alerts and weather
-    - Identify active triggers
-    - Apply rule conditions
-    - Generate messages
-
-    Parameters
-    ----------
-    plot_alerts : List[Dict]
-        Alerts for a plot
-    weather_data : Dict
-        Weather forecast
-
-    Returns
-    -------
-    List[str]
-        Advisory messages for the plot
     """
+    context = build_rule_evaluation_context(plot_alerts, weather_data)
 
-    context = build_context(plot_alerts, weather_data)
-
-    print("DEBUG CONTEXT:", context)
-
-    messages = []
-
-    triggers = context.get("triggers", [])
-
-    # sort triggers by priority
     triggers = sorted(
-        triggers,
+        context.get("triggers", []),
         key=lambda t: TRIGGER_PRIORITY.get(t, 999)
     )
 
+    messages = []
+
     for trigger in triggers:
-
-        trigger_rules = RULES_BY_TRIGGER.get(trigger, [])
-
-        for rule in trigger_rules:
-
-            if rule["trigger"] != trigger:
-                continue
-
-            condition = rule["condition"]
-            condition_fn = CONDITIONS.get(condition)
-
-            if condition_fn and condition_fn(context):
-                messages.append(rule["message"])
-                break
+        message = select_message_for_trigger(trigger, context, rules_by_trigger)
+        if message:
+            messages.append(message)
 
     return messages
 
-def is_alert_valid(alert: Dict[str, Any]) -> bool:
+def is_alert_valid(alert: Alert) -> bool:
     """
     Check if alert is still valid (based on validTill field).
     """

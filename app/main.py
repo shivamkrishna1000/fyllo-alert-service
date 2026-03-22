@@ -6,7 +6,7 @@ from datetime import timezone
 from app.database import get_latest_processed_date
 from app.notification_service import send_notification
 from app.database import delete_old_processed_alerts
-from app.alert_processor import process_alerts
+from app.alert_processor import process_and_generate_notifications
 from typing import List, Dict, Tuple, Any
 
 from app.config import (
@@ -115,7 +115,7 @@ def run_pipeline(client: FylloClient, connection, plots: List[Dict], plot_farmer
 
     logging.info("Total alerts fetched: %d", len(alerts))
 
-    messages = process_alerts(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
+    messages = process_and_generate_notifications(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
 
     send_notifications(connection, messages)
 

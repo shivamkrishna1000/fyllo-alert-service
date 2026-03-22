@@ -9,7 +9,7 @@ from app.database import (
     mark_alert_processed,
     get_connection,
 )
-from app.main import process_alerts
+from app.main import process_and_generate_notifications
 from app.notification_service import send_notification
 
 
@@ -88,7 +88,7 @@ def test_process_alerts_flow():
     }
 
     # Call the function under test
-    messages = process_alerts(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
+    messages = process_and_generate_notifications(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
 
     assert len(messages) == 1
 
@@ -164,7 +164,7 @@ def test_irrigation_with_high_rain_probability():
         }
     }
 
-    messages = process_alerts(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
+    messages = process_and_generate_notifications(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
 
     assert len(messages) == 1
 
@@ -228,7 +228,7 @@ def test_irrigation_with_low_rain_probability():
         }
     }
 
-    messages = process_alerts(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
+    messages = process_and_generate_notifications(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
 
     assert len(messages) == 1
 
@@ -274,7 +274,7 @@ def test_high_wind_alert():
         }
     }
 
-    messages = process_alerts(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
+    messages = process_and_generate_notifications(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
 
     assert len(messages) == 1
 
@@ -325,7 +325,7 @@ def test_irrigation_sensor_validation_failure():
         }
     }
 
-    messages = process_alerts(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
+    messages = process_and_generate_notifications(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
 
     # ❌ No message should be generated
     assert len(messages) == 0
@@ -386,7 +386,7 @@ def test_unsupported_alert_type():
         }
     }
 
-    messages = process_alerts(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
+    messages = process_and_generate_notifications(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
 
     # ❌ No message should be generated
     assert len(messages) == 0
@@ -459,7 +459,7 @@ def test_high_soil_temp_with_rain_alert():
         }
     }
 
-    messages = process_alerts(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
+    messages = process_and_generate_notifications(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
 
     assert len(messages) == 1
 
@@ -526,7 +526,7 @@ def test_duplicate_irrigation_alerts_same_plot():
         }
     }
 
-    messages = process_alerts(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
+    messages = process_and_generate_notifications(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
 
     assert len(messages) == 1
 

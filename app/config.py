@@ -4,7 +4,7 @@ Configuration loader module.
 
 import os
 from dotenv import load_dotenv
-
+import json
 
 def load_environment() -> None:
     """Load environment variables from .env file."""
@@ -49,3 +49,10 @@ def get_wati_test_number() -> str | None:
 def get_wati_template_name() -> str | None:
     """Retrieve Wati Template Name from environment."""
     return os.environ.get("WATI_TEMPLATE_NAME")
+
+def load_rules():
+    current_dir = os.path.dirname(__file__)
+    file_path = os.path.join(current_dir, "rules.json")
+
+    with open(file_path, "r") as f:
+        return json.load(f)
