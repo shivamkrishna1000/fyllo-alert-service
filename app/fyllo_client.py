@@ -1,14 +1,46 @@
-import requests
 import logging
-from typing import Any, Dict, List
-from app.config import get_farm_user_id, get_fyllo_password
 import os
+from typing import Any, Dict, List
+
+import requests
+
+from app.config import get_farm_user_id, get_fyllo_password
 
 TOKEN_FILE = "fyllo_token.txt"
 
-def make_fyllo_request(method: str, url: str, headers: dict, json_data: dict | None = None, timeout: int = 10):
+
+def make_fyllo_request(
+    method: str,
+    url: str,
+    headers: dict,
+    json_data: dict | None = None,
+    timeout: int = 10,
+):
     """
-    Generic wrapper for Fyllo API requests.
+    Make HTTP request to Fyllo API.
+
+    Parameters
+    ----------
+    method : str
+        HTTP method (GET or POST).
+    url : str
+        API endpoint.
+    headers : dict
+        Request headers.
+    json_data : dict | None
+        Payload for POST requests.
+    timeout : int
+        Request timeout in seconds.
+
+    Returns
+    -------
+    dict
+        JSON response from API.
+
+    Raises
+    ------
+    Exception
+        If API response status is not 200.
     """
     if method == "GET":
         response = requests.get(url, headers=headers, timeout=timeout)
@@ -22,17 +54,39 @@ def make_fyllo_request(method: str, url: str, headers: dict, json_data: dict | N
 
     return response.json()
 
-def make_request_with_retry(method: str, url: str, headers: dict, json_data: dict | None = None, retries: int = 3):
+
+def make_request_with_retry(
+    method: str,
+    url: str,
+    headers: dict,
+    json_data: dict | None = None,
+    retries: int = 3,
+):
     """
-    Wrapper with retry logic for Fyllo API.
+    Execute API request with retry mechanism.
+
+    Parameters
+    ----------
+    method : str
+    url : str
+    headers : dict
+    json_data : dict | None
+    retries : int
+
+    Returns
+    -------
+    dict
+        JSON response.
+
+    Raises
+    ------
+    Exception
+        If all retry attempts fail.
     """
     for attempt in range(retries):
         try:
             data = make_fyllo_request(
-                method=method,
-                url=url,
-                headers=headers,
-                json_data=json_data
+                method=method, url=url, headers=headers, json_data=json_data
             )
 
             return data
@@ -49,6 +103,7 @@ def make_request_with_retry(method: str, url: str, headers: dict, json_data: dic
                 logging.error("All retries failed.")
                 raise Exception("Fyllo API failed after retries")
 
+
 class FylloClient:
 
     def __init__(self, base_url: str):
@@ -61,22 +116,25 @@ class FylloClient:
                 self.token = f.read().strip()
 
     def login(self) -> None:
+        """
+        Authenticate with Fyllo API and store access token.
 
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        Exception
+            If login fails or token is missing.
+        """
         logging.info("Logging in to Fyllo API")
 
         url = f"{self.base_url}/farm-users/login"
 
-        payload = {
-            "farmUserId": get_farm_user_id(),
-            "otp": get_fyllo_password()
-        }
+        payload = {"farmUserId": get_farm_user_id(), "otp": get_fyllo_password()}
 
-        data = make_fyllo_request(
-            method="POST",
-            url=url,
-            headers={},
-            json_data=payload
-        )
+        data = make_fyllo_request(method="POST", url=url, headers={}, json_data=payload)
 
         if "access_token" not in data:
             raise Exception(f"Login failed: {data}")
@@ -88,16 +146,34 @@ class FylloClient:
 
         logging.info("Fyllo login successful and token saved")
 
-
     def _get_headers(self) -> Dict[str, str]:
+        """
+        Get authorization headers for API requests.
 
+        Returns
+        -------
+        Dict[str, str]
+            Headers with Bearer token.
+        """
         if not self.token:
             self.login()
 
         return {"Authorization": f"Bearer {self.token}"}
-    
-    def _make_authenticated_request(self, method: str, url: str) -> Dict[str, Any]:
 
+    def _make_authenticated_request(self, method: str, url: str) -> Dict[str, Any]:
+        """
+        Make authenticated API request with automatic token refresh.
+
+        Parameters
+        ----------
+        method : str
+        url : str
+
+        Returns
+        -------
+        Dict[str, Any]
+            API response.
+        """
         headers = self._get_headers()
 
         try:
@@ -109,21 +185,53 @@ class FylloClient:
                 headers = self._get_headers()
                 return make_request_with_retry(method, url, headers)
             raise
-                
-    def fetch_plot_live_data(self, plot_id: str, notification_last_seen: str | None = None) -> Dict[str, Any]:
 
+    def fetch_plot_live_data(
+        self, plot_id: str, notification_last_seen: str | None = None
+    ) -> Dict[str, Any]:
+        """
+        Fetch live sensor data for a plot.
+
+        Parameters
+        ----------
+        plot_id : str
+        notification_last_seen : str | None
+
+        Returns
+        -------
+        Dict[str, Any]
+            Live data including sensors and alerts.
+        """
         url = f"{self.base_url}/plots/{plot_id}/live-data"
 
         return self._make_authenticated_request("GET", url)
-                
-    def fetch_plots(self) -> List[Dict[str, Any]]:
 
+    def fetch_plots(self) -> List[Dict[str, Any]]:
+        """
+        Fetch all plots for the user.
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            List of plot metadata.
+        """
         url = f"{self.base_url}/plots"
 
         return self._make_authenticated_request("GET", url)
-                
-    def fetch_weather_forecast(self, plot_id: str) -> Dict[str, Any]:
 
+    def fetch_weather_forecast(self, plot_id: str) -> Dict[str, Any]:
+        """
+        Fetch weather forecast for a plot.
+
+        Parameters
+        ----------
+        plot_id : str
+
+        Returns
+        -------
+        Dict[str, Any]
+            Weather forecast data.
+        """
         url = f"{self.base_url}/plots/{plot_id}/weather-forecast"
-    
+
         return self._make_authenticated_request("GET", url)

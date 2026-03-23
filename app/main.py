@@ -1,32 +1,42 @@
 """
-Main execution script for hourly alert processing.
+Main execution script for daily alert processing.
 """
+
 import logging
 from datetime import timezone
-from app.database import get_latest_processed_date
-from app.notification_service import send_notification
-from app.database import delete_old_processed_alerts
-from app.alert_processor import process_and_generate_notifications
-from typing import List, Dict, Tuple, Any
+from typing import Any, Dict, List, Tuple
 
-from app.config import (
-    load_environment,
-    get_fyllo_base_url,
-    get_database_url,
-)
+from app.alert_processor import process_and_generate_notifications
+from app.config import get_database_url, get_fyllo_base_url, load_environment
 from app.database import (
-    initialize_database,
+    delete_old_processed_alerts,
     get_connection,
+    get_latest_processed_date,
+    initialize_database,
 )
 from app.fyllo_client import FylloClient
+from app.notification_service import send_notification
 
 logging.basicConfig(
-   level=logging.INFO,
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
-def get_plot_farmer_map(plots: List[Dict]) -> Dict[str, Dict[str, str]]:
 
+def get_plot_farmer_map(plots: List[Dict]) -> Dict[str, Dict[str, str]]:
+    """
+    Build mapping of plot IDs to farmer details.
+
+    Parameters
+    ----------
+    plots : List[Dict]
+        List of plot data from API.
+
+    Returns
+    -------
+    Dict[str, Dict[str, str]]
+        Mapping of plot_id → farmer details (name, mobile number).
+    """
     plot_farmer_map = {}
 
     for plot in plots:
@@ -45,8 +55,27 @@ def get_plot_farmer_map(plots: List[Dict]) -> Dict[str, Dict[str, str]]:
 
     return plot_farmer_map
 
-def fetch_plot_data(client: FylloClient, plots: List[Dict], last_date: str | None) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
+def fetch_plot_data(
+    client: FylloClient, plots: List[Dict], last_date: str | None
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Fetch live sensor data and weather data for all plots.
+
+    Parameters
+    ----------
+    client : FylloClient
+        API client instance.
+    plots : List[Dict]
+        List of plot metadata.
+    last_date : str | None
+        Last processed alert timestamp.
+
+    Returns
+    -------
+    Tuple[Dict[str, Any], Dict[str, Any]]
+        (plot_live_data_map, plot_weather_map)
+    """
     plot_live_data_map = {}
     plot_weather_map = {}
 
@@ -64,12 +93,25 @@ def fetch_plot_data(client: FylloClient, plots: List[Dict], last_date: str | Non
 
     return plot_live_data_map, plot_weather_map
 
-def build_alert_context(plots: List[Dict], plot_live_data_map: Dict[str, Dict]) -> Tuple[List[Dict], Dict[str, Any]]:
-    """
-    Transform raw API data into alerts, sensor map, and weather map.
-    Pure function (no API calls).
-    """
 
+def build_alert_context(
+    plots: List[Dict], plot_live_data_map: Dict[str, Dict]
+) -> Tuple[List[Dict], Dict[str, Any]]:
+    """
+    Extract alerts and sensor data from API response.
+
+    Parameters
+    ----------
+    plots : List[Dict]
+        List of plots.
+    plot_live_data_map : Dict[str, Dict]
+        Mapping of plot_id → live data.
+
+    Returns
+    -------
+    Tuple[List[Dict], Dict[str, Any]]
+        (alerts, plot_sensor_map)
+    """
     all_alerts = []
     plot_sensor_map = {}
 
@@ -92,22 +134,60 @@ def build_alert_context(plots: List[Dict], plot_live_data_map: Dict[str, Dict]) 
 
     return all_alerts, plot_sensor_map
 
+
 def send_notifications(connection, messages: List[Dict]) -> None:
     """
-    Send all generated alert messages to farmers.
+    Send notifications for all generated messages.
+
+    Parameters
+    ----------
+    connection
+        Database connection.
+    messages : List[Dict]
+        List of alert messages with farmer details.
+
+    Returns
+    -------
+    None
     """
     for alert_data in messages:
         send_notification(connection, alert_data["alert"], alert_data["farmer"])
 
-def run_pipeline(client: FylloClient, connection, plots: List[Dict], plot_farmer_map: Dict[str, Dict[str, str]]) -> None:
+
+def run_pipeline(
+    client: FylloClient,
+    connection,
+    plots: List[Dict],
+    plot_farmer_map: Dict[str, Dict[str, str]],
+) -> None:
     """
     Execute full alert processing pipeline.
-    """
 
+    Steps:
+    1. Fetch latest processed timestamp
+    2. Fetch plot data from API
+    3. Extract alerts and sensor data
+    4. Process alerts and generate messages
+    5. Send notifications
+    6. Cleanup old records
+
+    Parameters
+    ----------
+    client : FylloClient
+    connection
+    plots : List[Dict]
+    plot_farmer_map : Dict[str, Dict[str, str]]
+
+    Returns
+    -------
+    None
+    """
     last_date = get_latest_processed_date(connection)
 
     if last_date:
-        last_date = (last_date.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"))
+        last_date = (
+            last_date.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        )
 
     plot_live_data_map, plot_weather_map = fetch_plot_data(client, plots, last_date)
 
@@ -115,13 +195,22 @@ def run_pipeline(client: FylloClient, connection, plots: List[Dict], plot_farmer
 
     logging.info("Total alerts fetched: %d", len(alerts))
 
-    messages = process_and_generate_notifications(alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map)
+    messages = process_and_generate_notifications(
+        alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map
+    )
 
     send_notifications(connection, messages)
 
     delete_old_processed_alerts(connection, retention_days=60)
 
+
 def main():
+    """
+    Entry point for alert processing service.
+
+    Initializes environment, database, API client,
+    and runs the processing pipeline.
+    """
     connection = None
 
     try:
@@ -130,11 +219,11 @@ def main():
         base_url = get_fyllo_base_url()
         if not base_url:
             raise ValueError("FYLLO_BASE_URL is not set")
-        
+
         database_url = get_database_url()
         if not database_url:
             raise ValueError("DATABASE_URL is not set")
-        
+
         connection = get_connection(database_url)
         initialize_database(connection)
 
@@ -147,7 +236,7 @@ def main():
             client=client,
             connection=connection,
             plots=plots,
-            plot_farmer_map=plot_farmer_map
+            plot_farmer_map=plot_farmer_map,
         )
 
     except Exception:

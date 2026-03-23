@@ -19,3 +19,6 @@ __pycache__/
 
 # Token File
 fyllo_token.txt
+
+# Ruff cache
+.ruff_cache

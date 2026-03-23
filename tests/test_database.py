@@ -1,15 +1,17 @@
 """
 Unit tests for database logic.
 """
+
 import os
+from datetime import UTC, datetime
+
 from app.config import load_environment
-from datetime import datetime, UTC
 from app.database import (
+    delete_old_processed_alerts,
+    get_connection,
     initialize_database,
     is_alert_processed,
     mark_alert_processed,
-    delete_old_processed_alerts,
-    get_connection,
 )
 
 
@@ -53,7 +55,7 @@ def test_duplicate_alert_not_inserted():
     initialize_database(connection)
     delete_old_processed_alerts(connection, retention_days=0)
 
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
 
     alert_id = "duplicate-test-alert"
 

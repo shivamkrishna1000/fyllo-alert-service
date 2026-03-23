@@ -2,7 +2,7 @@
 Unit tests for alert processing logic.
 """
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 
 from app.alert_processor import is_alert_valid
 
@@ -24,9 +24,7 @@ def test_is_alert_valid_with_future_expiry():
     WHEN checking validity
     THEN it should return True
     """
-    future_time = (
-        datetime.now(UTC) + timedelta(hours=1)
-    ).isoformat()
+    future_time = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
 
     alert = {"validTill": future_time}
 
@@ -39,9 +37,7 @@ def test_is_alert_valid_with_past_expiry():
     WHEN checking validity
     THEN it should return False
     """
-    past_time = (
-        datetime.now(UTC) - timedelta(hours=1)
-    ).isoformat()
+    past_time = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
 
     alert = {"validTill": past_time}
 

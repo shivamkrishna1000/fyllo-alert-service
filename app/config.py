@@ -2,29 +2,36 @@
 Configuration loader module.
 """
 
-import os
-from dotenv import load_dotenv
 import json
+import os
+
+from dotenv import load_dotenv
+
 
 def load_environment() -> None:
     """Load environment variables from .env file."""
     load_dotenv()
 
+
 def get_fyllo_base_url() -> str:
     """Return the Fyllo base URL."""
     return os.environ.get("FYLLO_BASE_URL")
+
 
 def get_database_url() -> str:
     """Return Neon database path."""
     return os.environ.get("DATABASE_URL")
 
+
 def get_farm_user_id() -> str:
     """Retrieve Farm User ID from environment variables."""
     return os.environ.get("FARM_USER_ID")
 
+
 def get_fyllo_password() -> str:
     """Retrieve Fyllo password from environment."""
     return os.environ.get("FYLLO_PASSWORD")
+
 
 def get_wati_base_url() -> str | None:
     """Retrieve Wati base URL from environment"""
@@ -50,7 +57,16 @@ def get_wati_template_name() -> str | None:
     """Retrieve Wati Template Name from environment."""
     return os.environ.get("WATI_TEMPLATE_NAME")
 
+
 def load_rules():
+    """
+    Load rule definitions from JSON file.
+
+    Returns
+    -------
+    List[Dict]
+        List of rule objects.
+    """
     current_dir = os.path.dirname(__file__)
     file_path = os.path.join(current_dir, "rules.json")
 
