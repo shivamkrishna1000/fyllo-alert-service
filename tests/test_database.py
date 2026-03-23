@@ -4,6 +4,7 @@ Unit tests for database logic.
 
 import os
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 from app.config import load_environment
 from app.database import (
@@ -92,3 +93,11 @@ def test_duplicate_alert_not_inserted():
     connection.close()
 
     assert count == 1
+
+
+def test_delete_old_processed_alerts():
+    mock_connection = MagicMock()
+
+    delete_old_processed_alerts(mock_connection, 30)
+
+    assert mock_connection.cursor.called

@@ -7,3 +7,4 @@ ruff
 isort
 pre-commit
 interrogate
+pytest-cov

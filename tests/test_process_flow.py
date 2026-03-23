@@ -250,7 +250,7 @@ def test_irrigation_sensor_validation_failure():
         }
     ]
 
-    # ❌ Sensor condition NOT satisfied (moisture > optimal)
+    # Sensor condition NOT satisfied (moisture > optimal)
     plot_sensor_map = {"plot-A": {"moisture1": {"value": 10, "minOptimalValue": 5}}}
 
     # Weather irrelevant
@@ -264,15 +264,15 @@ def test_irrigation_sensor_validation_failure():
         alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map
     )
 
-    # ❌ No message should be generated
+    # No message should be generated
     assert len(messages) == 0
 
-    # ❌ Alert should NOT be marked as processed
+    # Alert should NOT be marked as processed
     from app.database import is_alert_processed
 
     assert is_alert_processed(connection, "alert-40") is False
 
-    # ✅ Should be stored as rejected
+    # Should be stored as rejected
     cursor = connection.cursor()
     cursor.execute(
         "SELECT reason, alert_text FROM rejected_alerts WHERE alert_id = %s",
@@ -297,7 +297,7 @@ def test_unsupported_alert_type():
 
     now = datetime.now(UTC)
 
-    # ❌ Unsupported alert type (e.g., 999)
+    # Unsupported alert type (e.g., 999)
     alerts = [
         {
             "id": "alert-50",
@@ -322,15 +322,15 @@ def test_unsupported_alert_type():
         alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map
     )
 
-    # ❌ No message should be generated
+    # No message should be generated
     assert len(messages) == 0
 
-    # ❌ Should NOT be marked as processed
+    # Should NOT be marked as processed
     from app.database import is_alert_processed
 
     assert is_alert_processed(connection, "alert-50") is False
 
-    # ✅ Should be stored as rejected
+    # Should be stored as rejected
     cursor = connection.cursor()
     cursor.execute(
         "SELECT reason, alert_text FROM rejected_alerts WHERE alert_id = %s",
@@ -449,6 +449,6 @@ def test_duplicate_irrigation_alerts_same_plot():
     message_text = messages[0]["alert"]["text"].lower()
     assert "irrigation is recommended today" in message_text
 
-    # ✅ BOTH alerts should be marked processed
+    # BOTH alerts should be marked processed
     assert is_alert_processed(connection, "alert-70") is True
     assert is_alert_processed(connection, "alert-71") is True
