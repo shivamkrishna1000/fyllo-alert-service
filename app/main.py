@@ -4,7 +4,7 @@ Main execution script for daily alert processing.
 
 import logging
 from datetime import timezone
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, TypedDict
 
 from app.alert_processor import process_and_generate_notifications
 from app.config import get_database_url, get_fyllo_base_url, load_environment
@@ -14,8 +14,39 @@ from app.database import (
     get_latest_processed_date,
     initialize_database,
 )
+from app.exceptions import (
+    DatabaseError,
+    FylloAPIError,
+    FylloAuthError,
+    NotificationError,
+)
 from app.fyllo_client import FylloClient
 from app.notification_service import send_notification
+
+
+class Plot(TypedDict, total=False):
+    plotId: str
+    farmerName: str
+    farmerMobile: str
+
+
+class Farmer(TypedDict):
+    farmer_name: str
+    mobile_number: str
+
+
+class Alert(TypedDict, total=False):
+    id: str
+    plotId: str
+    notifTypeId: int
+    text: str
+    date: str
+
+
+class PlotMessage(TypedDict):
+    alert: Dict
+    farmer: Farmer
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,7 +54,7 @@ logging.basicConfig(
 )
 
 
-def get_plot_farmer_map(plots: List[Dict]) -> Dict[str, Dict[str, str]]:
+def get_plot_farmer_map(plots: List[Plot]) -> Dict[str, Farmer]:
     """
     Build mapping of plot IDs to farmer details.
 
@@ -57,7 +88,7 @@ def get_plot_farmer_map(plots: List[Dict]) -> Dict[str, Dict[str, str]]:
 
 
 def fetch_plot_data(
-    client: FylloClient, plots: List[Dict], last_date: str | None
+    client: FylloClient, plots: List[Plot], last_date: str | None
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Fetch live sensor data and weather data for all plots.
@@ -95,8 +126,8 @@ def fetch_plot_data(
 
 
 def build_alert_context(
-    plots: List[Dict], plot_live_data_map: Dict[str, Dict]
-) -> Tuple[List[Dict], Dict[str, Any]]:
+    plots: List[Plot], plot_live_data_map: Dict[str, Dict]
+) -> Tuple[List[Alert], Dict[str, Any]]:
     """
     Extract alerts and sensor data from API response.
 
@@ -112,7 +143,7 @@ def build_alert_context(
     Tuple[List[Dict], Dict[str, Any]]
         (alerts, plot_sensor_map)
     """
-    all_alerts = []
+    all_alerts: List[Alert] = []
     plot_sensor_map = {}
 
     for plot in plots:
@@ -135,7 +166,7 @@ def build_alert_context(
     return all_alerts, plot_sensor_map
 
 
-def send_notifications(connection, messages: List[Dict]) -> None:
+def send_notifications(connection, messages: List[PlotMessage]) -> None:
     """
     Send notifications for all generated messages.
 
@@ -157,8 +188,8 @@ def send_notifications(connection, messages: List[Dict]) -> None:
 def run_pipeline(
     client: FylloClient,
     connection,
-    plots: List[Dict],
-    plot_farmer_map: Dict[str, Dict[str, str]],
+    plots: List[Plot],
+    plot_farmer_map: Dict[str, Farmer],
 ) -> None:
     """
     Execute full alert processing pipeline.
@@ -239,8 +270,17 @@ def main():
             plot_farmer_map=plot_farmer_map,
         )
 
-    except Exception:
-        logging.exception("Unexpected failure in alert service")
+    except (FylloAPIError, FylloAuthError) as e:
+        logging.error("Fyllo error: %s", e)
+
+    except DatabaseError as e:
+        logging.error("Database error: %s", e)
+
+    except NotificationError as e:
+        logging.error("Notification error: %s", e)
+
+    except Exception as e:
+        logging.exception("Unexpected failure: %s", e)
 
     finally:
         if connection:

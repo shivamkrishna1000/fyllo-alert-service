@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, List, TypedDict
 
 import requests
 
@@ -11,12 +11,30 @@ from app.config import (
     get_wati_test_number,
 )
 from app.database import mark_alert_processed
+from app.exceptions import NotificationError
 
 DEBUG_MODE = True
 
 
+class AlertMeta(TypedDict, total=False):
+    id: str
+    notifTypeId: int
+    date: str
+
+
+class AlertPayload(TypedDict):
+    alerts: List[AlertMeta]
+    plotId: str
+    text: str
+
+
+class Farmer(TypedDict):
+    farmer_name: str
+    mobile_number: str
+
+
 def build_notification_payload(
-    alert: Dict[str, Any], farmer: Dict[str, Any], template_name: str
+    alert: AlertPayload, farmer: Farmer, template_name: str
 ) -> Dict[str, Any]:
     """
     Build message payload independent of transport layer.
@@ -33,7 +51,7 @@ def build_notification_payload(
 
 
 def send_whatsapp_message(
-    request_url: str, payload: Dict[str, Any], headers: Dict[str, str]
+    request_url: str, payload: Dict, headers: Dict[str, str]
 ) -> None:
     """
     Send message via WhatsApp using WATI API.
@@ -48,12 +66,24 @@ def send_whatsapp_message(
     -------
     None
     """
-    response = requests.post(request_url, json=payload, headers=headers, timeout=10)
+    try:
+        response = requests.post(request_url, json=payload, headers=headers, timeout=10)
 
-    print("WATI Response:", response.status_code, response.text)
+        if response.status_code != 200:
+            raise NotificationError(
+                f"WATI failed: {response.status_code} - {response.text}"
+            )
+
+    except requests.RequestException as exc:
+        raise NotificationError(f"Request failed: {exc}")
 
 
-def mark_alerts_processed(connection, alerts, plot_id, alert_text):
+def mark_alerts_processed(
+    connection,
+    alerts: List[AlertMeta],
+    plot_id: str,
+    alert_text: str,
+) -> None:
     """
     Mark all alerts as processed in the database.
     """
@@ -72,7 +102,11 @@ def mark_alerts_processed(connection, alerts, plot_id, alert_text):
         )
 
 
-def send_notification(connection, alert: Dict, farmer: Dict) -> None:
+def send_notification(
+    connection,
+    alert: AlertPayload,
+    farmer: Farmer,
+) -> None:
     """
     Send alert notification to farmer.
 
@@ -102,7 +136,7 @@ def send_notification(connection, alert: Dict, farmer: Dict) -> None:
         "Content-Type": "application/json",
     }
 
-    alerts = alert.get("alerts", [])
+    alerts: List[AlertMeta] = alert.get("alerts", [])
     mobile_number = farmer.get("mobile_number")
     alert_text = alert.get("text") or " "
     plot_id = alert.get("plotId")

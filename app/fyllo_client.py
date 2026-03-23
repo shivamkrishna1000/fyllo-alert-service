@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 import requests
 
 from app.config import get_farm_user_id, get_fyllo_password
+from app.exceptions import FylloAPIError, FylloAuthError
 
 TOKEN_FILE = "fyllo_token.txt"
 
@@ -50,7 +51,9 @@ def make_fyllo_request(
         raise ValueError(f"Unsupported method: {method}")
 
     if response.status_code != 200:
-        raise Exception(f"Fyllo API error: {response.status_code} - {response.text}")
+        raise FylloAPIError(
+            f"Fyllo API error: {response.status_code} - {response.text}"
+        )
 
     return response.json()
 
@@ -101,7 +104,7 @@ def make_request_with_retry(
 
             if attempt == retries - 1:
                 logging.error("All retries failed.")
-                raise Exception("Fyllo API failed after retries")
+                raise FylloAPIError("Fyllo API failed after retries")
 
 
 class FylloClient:
@@ -137,7 +140,7 @@ class FylloClient:
         data = make_fyllo_request(method="POST", url=url, headers={}, json_data=payload)
 
         if "access_token" not in data:
-            raise Exception(f"Login failed: {data}")
+            raise FylloAuthError(f"Login failed: {data}")
 
         self.token = data["access_token"]
 

@@ -19,6 +19,18 @@ class Alert(TypedDict, total=False):
     validTill: str
 
 
+class RuleContext(TypedDict, total=False):
+    irrigation: bool
+    rain_alert: bool
+    low_soil_temp: bool
+    high_soil_temp: bool
+    high_wind: bool
+    rain_prob_gt_60: bool
+    rain_prob_30_60: bool
+    rain_prob_lt_30: bool
+    triggers: List[str]
+
+
 class RejectedAlert(TypedDict):
     alert_id: str
     plot_id: str
@@ -60,7 +72,7 @@ def is_supported_alert(notif_type_id: int) -> bool:
     return notif_type_id in ALERT_TYPE_MAP
 
 
-def is_duplicate_alert(alert_id: str, processed_alert_ids: set) -> bool:
+def is_duplicate_alert(alert_id: str, processed_alert_ids: set[str]) -> bool:
     return alert_id in processed_alert_ids
 
 
@@ -86,7 +98,7 @@ def check_supported_alert(alert: Alert) -> tuple[bool, str | None]:
 
 
 def check_duplicate_alert(
-    alert: Alert, processed_alert_ids: set
+    alert: Alert, processed_alert_ids: set[str]
 ) -> tuple[bool, str | None]:
     if is_duplicate_alert(alert["id"], processed_alert_ids):
         return False, "duplicate_alert"
@@ -108,7 +120,7 @@ def check_sensor_validation(
 
 
 def validate_alert(
-    alert: Alert, sensors: Dict[str, Any], processed_alert_ids: set
+    alert: Alert, sensors: Dict[str, Any], processed_alert_ids: set[str]
 ) -> tuple[bool, str | None]:
     """
     Validate a single alert against all validation rules.
@@ -149,7 +161,7 @@ def validate_alert(
 
 
 def group_valid_alerts_by_plot(
-    alerts: List[Alert], plot_sensor_map: Dict[str, Any], processed_alert_ids: set
+    alerts: List[Alert], plot_sensor_map: Dict[str, Any], processed_alert_ids: set[str]
 ) -> tuple[Dict[str, List[Alert]], List[RejectedAlert]]:
     """
     Validate alerts and group valid ones by plot.
@@ -171,7 +183,7 @@ def group_valid_alerts_by_plot(
         (grouped_valid_alerts, rejected_alerts)
     """
     grouped_alerts = defaultdict(list)
-    rejected_alerts = []
+    rejected_alerts: List[RejectedAlert] = []
 
     for alert in alerts:
         plot_id = alert.get("plotId")
@@ -501,7 +513,7 @@ def validate_sensor_conditions(alert: Alert, sensors: Dict[str, Any]) -> bool:
 
 def build_rule_evaluation_context(
     plot_alerts: List[Alert], weather_data: Dict[str, Any]
-) -> Dict[str, Any]:
+) -> RuleContext:
     """
     Build evaluation context for rule engine.
 
@@ -521,7 +533,7 @@ def build_rule_evaluation_context(
     Dict[str, Any]
         Context used for rule evaluation.
     """
-    context = {
+    context: RuleContext = {
         "irrigation": False,
         "rain_alert": False,
         "low_soil_temp": False,
@@ -560,7 +572,7 @@ def build_rule_evaluation_context(
         if alert_name:
             context[alert_name] = True
 
-    detected_triggers = []
+    detected_triggers: List[str] = []
 
     for trigger in TRIGGER_PRIORITY:
 
@@ -572,7 +584,7 @@ def build_rule_evaluation_context(
     return context
 
 
-def does_rule_apply(rule: Rule, context: Dict[str, Any]) -> bool:
+def does_rule_apply(rule: Rule, context: RuleContext) -> bool:
     """
     Check if a rule applies for given context.
 
@@ -598,7 +610,7 @@ def does_rule_apply(rule: Rule, context: Dict[str, Any]) -> bool:
 
 
 def select_message_for_trigger(
-    trigger: str, context: Dict[str, Any], rules_by_trigger: Dict[str, List[Rule]]
+    trigger: str, context: RuleContext, rules_by_trigger: Dict[str, List[Rule]]
 ) -> str | None:
     """
     Select applicable message for a trigger.
@@ -654,7 +666,7 @@ def generate_advisory_messages(
         context.get("triggers", []), key=lambda t: TRIGGER_PRIORITY.get(t, 999)
     )
 
-    messages = []
+    messages: List[str] = []
 
     for trigger in triggers:
         message = select_message_for_trigger(trigger, context, rules_by_trigger)

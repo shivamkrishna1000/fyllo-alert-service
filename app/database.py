@@ -4,6 +4,8 @@ Database utility functions for storing processed alerts.
 
 import psycopg2
 
+from app.exceptions import DatabaseError
+
 
 def get_connection(database_url: str):
     """
@@ -19,7 +21,10 @@ def get_connection(database_url: str):
     connection
         psycopg2 database connection object.
     """
-    return psycopg2.connect(database_url)
+    try:
+        return psycopg2.connect(database_url)
+    except Exception as exc:
+        raise DatabaseError(f"Failed to connect to database: {exc}")
 
 
 def initialize_database(connection) -> None:

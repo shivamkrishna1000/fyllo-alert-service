@@ -6,3 +6,4 @@ black
 ruff
 isort
 pre-commit
+interrogate
