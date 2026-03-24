@@ -395,10 +395,9 @@ ALERT_TYPE_MAP = {
 TRIGGER_PRIORITY = {
     "rain_alert": 1,
     "irrigation": 2,
-    "nutrient": 3,
-    "low_soil_temp": 4,
-    "high_soil_temp": 4,
-    "high_wind": 5,
+    "low_soil_temp": 3,
+    "high_soil_temp": 3,
+    "high_wind": 4,
 }
 
 

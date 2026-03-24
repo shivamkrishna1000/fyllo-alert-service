@@ -1,6 +1,7 @@
 import os
 from datetime import UTC, datetime
 
+from app.alert_processor import process_and_generate_notifications
 from app.config import load_environment
 from app.database import (
     delete_old_processed_alerts,
@@ -8,7 +9,6 @@ from app.database import (
     initialize_database,
     is_alert_processed,
 )
-from app.main import process_and_generate_notifications
 from app.notification_service import send_notification
 
 

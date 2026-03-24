@@ -10,15 +10,31 @@ __pycache__/
 
 # Environment variables (secrets)
 .env
+.env.*
+!.env.example
 
 # VSCode
 .vscode/
 
 # Mac
 .DS_Store
+Thumbs.db
 
 # Token File
 fyllo_token.txt
 
 # Ruff cache
 .ruff_cache
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# Logs
+*.log
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

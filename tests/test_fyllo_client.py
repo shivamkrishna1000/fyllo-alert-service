@@ -1,7 +1,9 @@
 from unittest.mock import patch
 
+import pytest
 import requests
 
+from app.exceptions import FylloAPIError
 from app.fyllo_client import FylloClient, make_request_with_retry
 
 
@@ -78,7 +80,7 @@ def test_retry_success_after_failure(mock_request):
 def test_retry_all_fail(mock_request):
     mock_request.side_effect = requests.RequestException("fail")
 
-    try:
-        make_request_with_retry("GET", "url", {}, retries=2)
-    except Exception:
-        assert True
+    with patch("app.fyllo_client.make_fyllo_request") as mock_request:
+        mock_request.side_effect = requests.RequestException("fail")
+        with pytest.raises(FylloAPIError):
+            make_request_with_retry("GET", "url", {}, retries=2)
