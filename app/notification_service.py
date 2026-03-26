@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from typing import Any, Dict, List, TypedDict
 
@@ -31,6 +32,10 @@ class AlertPayload(TypedDict):
 class Farmer(TypedDict):
     farmer_name: str
     mobile_number: str
+
+
+def _is_test_env() -> bool:
+    return os.getenv("ENV") == "test"
 
 
 def build_notification_payload(
@@ -147,7 +152,11 @@ def send_notification(
 
     request_url = f"{url}?whatsappNumber={mobile_number}"
 
-    if DEBUG_MODE:
+    # Skip real API calls in test/CI environment
+    if _is_test_env():
+        pass
+
+    elif DEBUG_MODE:
         print("\n----- ALERT MESSAGE (DEBUG) -----")
         print("Farmer:", farmer.get("farmer_name"))
         print("Mobile:", mobile_number)
