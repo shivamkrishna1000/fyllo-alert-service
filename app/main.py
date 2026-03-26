@@ -224,8 +224,6 @@ def run_pipeline(
 
     alerts, plot_sensor_map = build_alert_context(plots, plot_live_data_map)
 
-    logging.info("Total alerts fetched: %d", len(alerts))
-
     messages = process_and_generate_notifications(
         alerts, plot_weather_map, plot_sensor_map, connection, plot_farmer_map
     )
