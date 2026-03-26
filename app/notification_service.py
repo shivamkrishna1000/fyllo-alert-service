@@ -8,12 +8,12 @@ from app.config import (
     get_wati_base_url,
     get_wati_template_name,
     get_wati_tenant_id,
-    get_wati_test_number,
 )
 from app.database import mark_alert_processed
 from app.exceptions import NotificationError
 
-DEBUG_MODE = True
+"""from app.config import get_wati_test_number"""
+DEBUG_MODE = False
 
 
 class AlertMeta(TypedDict, total=False):
@@ -126,7 +126,7 @@ def send_notification(
     wati_base_url = get_wati_base_url()
     wati_tenant_id = get_wati_tenant_id()
     wati_api_token = get_wati_api_token()
-    wati_test_number = get_wati_test_number()
+    """wati_test_number = get_wati_test_number()"""
     wati_template_name = get_wati_template_name()
 
     url = f"{wati_base_url}/{wati_tenant_id}/api/v1/sendTemplateMessage"
@@ -145,7 +145,7 @@ def send_notification(
         alert=alert, farmer=farmer, template_name=wati_template_name
     )
 
-    request_url = f"{url}?whatsappNumber={wati_test_number}"
+    request_url = f"{url}?whatsappNumber={mobile_number}"
 
     if DEBUG_MODE:
         print("\n----- ALERT MESSAGE (DEBUG) -----")
